@@ -56,6 +56,21 @@ class BaseNdbAdmin(BaseModelAdmin):
     return ct
 
 
+class NdbChoiceFieldFilter(admin.filters.ChoicesFieldListFilter):
+  def __init__(self, field, request, params, model, model_admin, field_path):
+    self.lookup_kwarg = field_path
+    self.lookup_val = request.GET.get(self.lookup_kwarg)
+    self.model = model
+    # skip immediate parent
+    super(admin.filters.ChoicesFieldListFilter, self).__init__(
+        field, request, params, model, model_admin, field_path)
+
+  def queryset(self, request, queryset):
+    for field, val in self.used_parameters.items():
+      queryset = queryset.filter(self.model._properties[field]==val)
+    return queryset
+admin.filters.FieldListFilter.register(lambda f: bool(f.choices), NdbChoiceFieldFilter, True)
+
 class NdbChangeList(ChangeList):
   def get_ordering(self, request, queryset):
     params = self.params
@@ -85,18 +100,22 @@ class NdbChangeList(ChangeList):
           continue  # Invalid ordering specified, skip it.
 
     queryset = queryset.order(*ordering)
-    # order returns a new query so we need to re-annotate the fake _clone method.
-    queryset._clone = lambda: queryset
     return queryset
 
   def get_queryset(self, request):
     # First, we collect all the declared list filters.
     (self.filter_specs, self.has_filters, remaining_lookup_params,
       filters_use_distinct) = self.get_filters(request)
-    import pdb; pdb.set_trace()
-    qs = self.root_queryset
-    qs = self.get_ordering(request, qs)
-    return qs
+    queryset = self.root_queryset
+    queryset = self.get_ordering(request, queryset)
+    queryset = self.root_queryset
+    for filter_spec in self.filter_specs:
+        new_queryset = filter_spec.queryset(request, queryset)
+        if new_queryset is not None:
+            queryset = new_queryset
+    # order/filter return a new query so we need to re-annotate the fake _clone method.
+    queryset._clone = lambda: queryset
+    return queryset
 
 
 class NdbAdmin(BaseNdbAdmin, admin.ModelAdmin):
