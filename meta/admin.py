@@ -56,20 +56,37 @@ class BaseNdbAdmin(BaseModelAdmin):
     return ct
 
 
-class NdbChoiceFieldFilter(admin.filters.ChoicesFieldListFilter):
+class KwargFieldListFilter(admin.filters.FieldListFilter):
+  """Intermediate class to make ListFilters ndb-compatible.
+
+  Removes double-underscore syntax from lookup kwargs, and performs ndb queries.
+  If the `is_key` class attribute is True, will convert the lookup value to a
+  key before querying.
+  """
   def __init__(self, field, request, params, model, model_admin, field_path):
     self.lookup_kwarg = field_path
     self.lookup_val = request.GET.get(self.lookup_kwarg)
     self.model = model
-    # skip immediate parent
-    super(admin.filters.ChoicesFieldListFilter, self).__init__(
+    super(KwargFieldListFilter, self).__init__(
         field, request, params, model, model_admin, field_path)
 
   def queryset(self, request, queryset):
     for field, val in self.used_parameters.items():
+      if self.is_key:
+        val = ndb.Key(urlsafe=self.lookup_val)
       queryset = queryset.filter(self.model._properties[field]==val)
     return queryset
+
+
+class NdbChoiceFieldFilter(admin.filters.ChoicesFieldListFilter, KwargFieldListFilter):
+  is_key = False
 admin.filters.FieldListFilter.register(lambda f: bool(f.choices), NdbChoiceFieldFilter, True)
+
+
+class NdbRelatedFieldListFilter(admin.filters.RelatedFieldListFilter, KwargFieldListFilter):
+  is_key = True
+admin.filters.FieldListFilter.register(lambda f: f.remote_field, NdbRelatedFieldListFilter, True)
+
 
 class NdbChangeList(ChangeList):
   def get_ordering(self, request, queryset):
@@ -108,7 +125,6 @@ class NdbChangeList(ChangeList):
       filters_use_distinct) = self.get_filters(request)
     queryset = self.root_queryset
     queryset = self.get_ordering(request, queryset)
-    queryset = self.root_queryset
     for filter_spec in self.filter_specs:
         new_queryset = filter_spec.queryset(request, queryset)
         if new_queryset is not None:
@@ -145,7 +161,8 @@ class AuthorAdmin(NdbAdmin):
 
 class BookAdmin(NdbAdmin):
   model = Book
-  list_display = ('name', 'get_author', 'pages')
+  list_display = ('name', 'author', 'get_author', 'pages')
+  list_filter = ('author',)
 
   def get_author(self, obj):
     return obj.author.get() if obj.author else ""
