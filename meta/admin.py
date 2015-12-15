@@ -1,17 +1,30 @@
 from django.contrib import admin
-from django.contrib.admin import helpers
+from django.contrib.admin import helpers, widgets
 from django.contrib.admin.options import BaseModelAdmin, csrf_protect_m
 from django.contrib.admin.views.main import ChangeList, ORDER_VAR
+from django import forms
 from django.utils.safestring import mark_safe
 from google.appengine.ext import ndb
 from google.appengine.ext.ndb import metadata
 
 from meta.forms import NdbBaseInlineFormSet
 from meta.models import Book, Author, User
+from meta import models
 
 
 class BaseNdbAdmin(BaseModelAdmin):
   actions_selection_counter = False
+  formfield_overrides = {
+      models.DateTimePropertyWrapper: {
+          'form_class': forms.SplitDateTimeField,
+          'widget': widgets.AdminSplitDateTime
+      },
+      models.DatePropertyWrapper: {'widget': widgets.AdminDateWidget},
+      models.TimePropertyWrapper: {'widget': widgets.AdminTimeWidget},
+      models.TextPropertyWrapper: {'widget': widgets.AdminTextareaWidget},
+      models.IntegerPropertyWrapper: {'widget': widgets.AdminIntegerFieldWidget},
+      models.StringPropertyWrapper: {'widget': widgets.AdminTextInputWidget},
+  }
   def has_add_permission(self, request):
     return True
   def has_change_permission(self, request, obj=None):

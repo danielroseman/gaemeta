@@ -4,6 +4,7 @@ from django.db.models import options
 from django.db.models.base import ModelState
 from django.db.models.fields import BLANK_CHOICE_DASH
 from django.db.models.fields.related import ManyToManyRel, ManyToOneRel
+from django.db.models.query_utils import PathInfo
 from django import forms
 from django.utils.encoding import smart_text
 from django.utils.functional import cached_property
@@ -23,6 +24,7 @@ class PropertyWrapper(object):
   editable = True
   unique = False
   auto_created = False
+  formfield_class = forms.CharField
 
   def __init__(self, name, property_, model):
     self.name = name
@@ -32,17 +34,7 @@ class PropertyWrapper(object):
     self.default = getattr(self.property, 'default', None)
     self.flatchoices = self.choices = [(x, x) for x in property_._choices or []]
     self.verbose_name = property_._verbose_name or name
-    if isinstance(self.property, ndb.KeyProperty):
-      self.is_relation = True
-      if getattr(self.property, 'repeated', False):
-        self.many_to_many = True
-        rel_class = ManyToManyRel
-      else:
-        self.many_to_one = True
-        rel_class = ManyToOneRel
-      self.remote_field = rel_class(self, ndb.Model._kind_map.get(self.property._kind), 'key')
-    else:
-      self.remote_field = None
+    self.remote_field = None
 
   def __repr__(self):
     return 'PropertyWrapper: {}'.format(self.name)
@@ -79,25 +71,105 @@ class PropertyWrapper(object):
                 #'help_text': self.help_text
                 }
     if self.default:
-      # ndb default must be a value, not a callable
+      # ndb default is always a value, not a callable
       defaults['initial'] = self.default
     if self.choices:
       defaults['choices'] = self.choices
       field_class = forms.ChoiceField
-    elif isinstance(self.property, ndb.KeyProperty):
-      defaults['required'] = self.property._required
-      defaults['kind'] = self.property._kind
-      field_class = KeyField
     else:
-      fields = {
-        ndb.StringProperty: forms.CharField,
-        ndb.IntegerProperty: forms.IntegerField,
-        ndb.BooleanProperty: forms.BooleanField,
-      }
-      field_class = fields[self.property.__class__]
+      field_class = self.formfield_class
     defaults.update(kwargs)
     return field_class(**defaults)
 
+
+class KeyPropertyWrapper(PropertyWrapper):
+  formfield_class = KeyField
+
+  def __init__(self, *args, **kwargs):
+    super(KeyPropertyWrapper, self).__init__(*args, **kwargs)
+    self.is_relation = True
+    if getattr(self.property, 'repeated', False):
+      self.many_to_many = True
+      rel_class = ManyToManyRel
+    else:
+      self.many_to_one = True
+      rel_class = ManyToOneRel
+    remote_kind = ndb.Model._kind_map.get(self.property._kind)
+    self.remote_field = rel_class(self, remote_kind, 'key')
+    self.related_model = remote_kind
+    self.target_field = self.remote_field.get_related_field()
+
+  def formfield(self, **kwargs):
+    defaults = {
+      # 'required': self.property._required,
+      'kind': self.property._kind
+    }
+    defaults.update(kwargs)
+    return super(KeyPropertyWrapper, self).formfield(**defaults)
+
+  def get_path_info(self):
+    """
+    Get path from this field to the related model.
+    """
+    opts = self.remote_field.model._meta
+    from_opts = self.model._meta
+    return [PathInfo(from_opts, opts, (self.remote_field,), self, False, True)]
+
+  def get_choices(self, include_blank=True, blank_choice=BLANK_CHOICE_DASH,
+                  limit_to_currently_related=False):
+    """
+    Return choices with a default blank choices included, for use as
+    SelectField choices for this field.
+
+    Analog of django.db.models.fields.Field.get_choices(), provided
+    initially for utilization by RelatedFieldListFilter.
+    """
+    first_choice = blank_choice if include_blank else []
+    queryset = ndb.Query(kind=self.property._kind)
+
+    lst = [(x.key.urlsafe(), smart_text(x)) for x in queryset]
+    return first_choice + lst
+
+class StringPropertyWrapper(PropertyWrapper):
+  pass
+
+class IntegerPropertyWrapper(PropertyWrapper):
+  formfield_class = forms.IntegerField
+
+class BooleanPropertyWrapper(PropertyWrapper):
+  formfield_class = forms.BooleanField
+
+class FloatPropertyWrapper(PropertyWrapper):
+  formfield_class = forms.FloatField
+
+class DatePropertyWrapper(PropertyWrapper):
+  formfield_class = forms.DateField
+
+class DateTimePropertyWrapper(PropertyWrapper):
+  formfield_class = forms.DateTimeField
+
+class TimePropertyWrapper(PropertyWrapper):
+  formfield_class = forms.TimeField
+
+class TextPropertyWrapper(PropertyWrapper):
+  formfield_class = forms.CharField
+
+  def formfield(self, **kwargs):
+    defaults = {
+      'widget': forms.Textarea
+    }
+    defaults.update(kwargs)
+    super(KeyPropertyWrapper, self).formfield(**defaults)
+
+WRAPPERS = {
+  ndb.IntegerProperty: IntegerPropertyWrapper,
+  ndb.BooleanProperty: BooleanPropertyWrapper,
+  ndb.FloatProperty: FloatPropertyWrapper,
+  ndb.DateProperty: DatePropertyWrapper,
+  ndb.DateTimeProperty: DateTimePropertyWrapper,
+  ndb.TextProperty: TextPropertyWrapper,
+  ndb.KeyProperty: KeyPropertyWrapper,
+}
 
 class KeyWrapper(PropertyWrapper):
   def __init__(self, key):
@@ -185,11 +257,9 @@ class DjangoCompatibleModel(ndb.Model):
   @property
   def pk(self):
     return self.key
-    #if self.key:
-      #return self.key.urlsafe()
 
   def serializable_value(self, prop):
-    if prop in ['pk', 'id']:
+    if prop in ['pk', 'id', 'key']:
       return self.key.urlsafe()
     return self._values[prop]
 
