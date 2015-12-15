@@ -26,18 +26,25 @@ class PropertyWrapper(object):
   auto_created = False
   formfield_class = forms.CharField
 
-  def __init__(self, name, property_, model):
+  def __init__(self, name, property_, model, creation_counter):
     self.name = name
     self.property = property_
     self.model = model
-    self.blank = not self.property._required
-    self.default = getattr(self.property, 'default', None)
+    self.creation_counter = creation_counter
+    self.blank = self.null = not self.property._required
+    self.default = getattr(self.property, '_default', None)
     self.flatchoices = self.choices = [(x, x) for x in property_._choices or []]
     self.verbose_name = property_._verbose_name or name
     self.remote_field = None
 
   def __repr__(self):
     return 'PropertyWrapper: {}'.format(self.name)
+
+  def __lt__(self, other):
+    # This is needed because bisect does not take a comparison function.
+    if isinstance(other, PropertyWrapper):
+      return self.creation_counter < other.creation_counter
+    return NotImplemented
 
   #@cached_property
   #def related_model(self):
@@ -182,6 +189,8 @@ class KeyWrapper(PropertyWrapper):
     self.primary_key = True
     self.auto_created = True
     self.remote_field = None
+    # key is always the first field
+    self.creation_counter = 0
 
   def to_python(self, value):
     if isinstance(value, basestring):
@@ -201,12 +210,13 @@ class NdbMeta(options.Options):
     instance.add_field(KeyWrapper(instance.model.key))
 
     # ndb models store their properties in a standard dict, so there is no
-    # consistent field order - unlike Django, which uses an OrderedDict. There
-    # isn't anything we can do about this without hacking the ndb code itself;
-    # the best alternative is to allow an optional 'field_order' attribute on
-    # the model which allows the user to specify fields in a particular order.
-    # If the attribute is missing, or does not contain all the defined fields,
-    # they will be added in sorted order.
+    # consistent field order. The Django model metaclass registers fields with a
+    # creation_counter attribute in the order they are defined; we can't do that
+    # without hacking the ndb code itself. The best alternative is to support
+    # an optional 'field_order' attribute on the model which allows the user
+    # to specify fields in a particular order, which will be used to set the
+    # creation_counter. If the field_order attribute is missing, or does not
+    # contain all the defined fields, they will be added in sorted order.
     field_order = getattr(model, 'field_order', None)
     all_fields = instance.model._properties
     if field_order:
@@ -216,8 +226,10 @@ class NdbMeta(options.Options):
         field_order.extend(sorted(missing))
     else:
       field_order = sorted(all_fields)
-    for fieldname in field_order:
-      wrapper = PropertyWrapper(fieldname, all_fields[fieldname], model)
+    for creation_counter, fieldname in enumerate(field_order):
+      field = all_fields[fieldname]
+      wrapper_class = WRAPPERS.get(field.__class__, PropertyWrapper)
+      wrapper = wrapper_class(fieldname, field, model, creation_counter)
       instance.add_field(wrapper)
 
 
