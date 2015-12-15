@@ -2,8 +2,10 @@ from django.apps import apps
 from django.db import models
 from django.db.models import options
 from django.db.models.base import ModelState
+from django.db.models.fields import BLANK_CHOICE_DASH
 from django.db.models.fields.related import ManyToManyRel, ManyToOneRel
 from django import forms
+from django.utils.encoding import smart_text
 from django.utils.functional import cached_property
 from django.utils.text import capfirst
 
@@ -48,12 +50,17 @@ class PropertyWrapper(object):
   #@cached_property
   #def related_model(self):
     #return self.remote_field.model
+  def get_choices(self, include_blank=True,
+                  blank_choice=BLANK_CHOICE_DASH, limit_choices_to=None):
+    return self.get_flatchoices(include_blank, blank_choice)
 
   def get_attname(self):
     return self.name
 
-  def get_flatchoices(self, include_blank, blank_choice):
-    return self.choices
+  def get_flatchoices(self, include_blank=True,
+                      blank_choice=BLANK_CHOICE_DASH):
+    first_choice = blank_choice if include_blank else []
+    return first_choice + list(self.choices)
 
   def value_from_object(self, obj):
     value = getattr(obj, self.name)
