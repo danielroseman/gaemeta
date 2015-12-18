@@ -1,3 +1,5 @@
+import datetime
+
 from django.contrib import admin
 from django.contrib.admin import helpers, widgets
 from django.contrib.admin.options import BaseModelAdmin, csrf_protect_m
@@ -83,22 +85,48 @@ class KwargFieldListFilter(admin.filters.FieldListFilter):
     super(KwargFieldListFilter, self).__init__(
         field, request, params, model, model_admin, field_path)
 
+  def convert_value(self, val):
+    return val
+
   def queryset(self, request, queryset):
     for field, val in self.used_parameters.items():
-      if self.is_key:
-        val = ndb.Key(urlsafe=self.lookup_val)
+      if field == getattr(self, 'lookup_kwarg_isnull', None):
+        val = None
+        field = self.lookup_kwarg
+      else:
+        val = self.convert_value(val)
       queryset = queryset.filter(self.model._properties[field]==val)
     return queryset
 
 
 class NdbChoiceFieldFilter(admin.filters.ChoicesFieldListFilter, KwargFieldListFilter):
-  is_key = False
+  pass
 admin.filters.FieldListFilter.register(lambda f: bool(f.choices), NdbChoiceFieldFilter, True)
 
 
 class NdbRelatedFieldListFilter(admin.filters.RelatedFieldListFilter, KwargFieldListFilter):
-  is_key = True
+  def convert_value(self, val):
+    return ndb.Key(urlsafe=val)
 admin.filters.FieldListFilter.register(lambda f: f.remote_field, NdbRelatedFieldListFilter, True)
+
+class BooleanFieldListFilter(admin.filters.BooleanFieldListFilter, KwargFieldListFilter):
+  def convert_value(self, val):
+    return bool(int(val))
+admin.filters.FieldListFilter.register(lambda f: isinstance(f.property, ndb.BooleanProperty), BooleanFieldListFilter, True)
+
+class DateFieldListFilter(admin.filters.DateFieldListFilter, KwargFieldListFilter):
+  def queryset(self, request, queryset):
+    for field, val in self.used_parameters.items():
+      val = self.convert_value(val)
+      if field == self.lookup_kwarg_since:
+        queryset = queryset.filter(self.model._properties[self.field_path]>=val)
+      elif field == self.lookup_kwarg_until:
+        queryset = queryset.filter(self.model._properties[self.field_path]<val)
+    return queryset
+
+  def convert_value(self, val):
+    return datetime.datetime.strptime(val, '%Y-%m-%d').date()
+admin.filters.FieldListFilter.register(lambda f: isinstance(f.property, ndb.DateProperty), DateFieldListFilter, True)
 
 
 class NdbChangeList(ChangeList):
