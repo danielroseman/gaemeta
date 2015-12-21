@@ -184,6 +184,10 @@ class TabularNdbInline(BaseNdbAdmin, admin.TabularInline):
 
 
 class NdbAdminSite(admin.AdminSite):
+  def register(self, model_or_iterable, admin_class=None, **options):
+    if not admin_class:
+      admin_class = NdbAdmin
+    return super(NdbAdminSite, self).register(model_or_iterable, admin_class, **options)
   def has_permission(self, request):
     return True
   def check_dependencies(self):
