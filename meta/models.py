@@ -276,26 +276,6 @@ class DjangoCompatibleModel(ndb.Model):
     return self._values[prop]
 
 
-class Author(DjangoCompatibleModel):
-  name = ndb.StringProperty()
-  sex = ndb.StringProperty(choices=('Male', 'Female'))
-
-  def __unicode__(self):
-    return self.name
-
-
-class Book(DjangoCompatibleModel):
-  name = ndb.StringProperty()
-  author = ndb.KeyProperty(Author)
-  pages = ndb.IntegerProperty()
-
-  field_order = ['name', 'author', 'pages']
-
-  def __unicode__(self):
-    return self.name
-    #return u'{} by {}'.format(self.name, self.author.get())
-
-
 class User(DjangoCompatibleModel):
   user_id = ndb.StringProperty()
   username = ndb.StringProperty()

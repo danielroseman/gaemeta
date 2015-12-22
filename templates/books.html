@@ -2,7 +2,7 @@
   <body>
     <ul>
       {% for book in books %}
-        <li><a href="{% url 'book_form' name=book.name %}">{{ book.name }}</a> {% if book.author %}by {{ book.author }}{% endif %}</li>
+        <li><a href="{% url 'book_form' name=book.name %}">{{ book.name }}</a> {% if book.author %}by {{ book.author.get }}{% endif %}</li>
       {% endfor %}
     </ul>
   </body>

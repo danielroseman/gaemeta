@@ -10,7 +10,6 @@ from google.appengine.ext import ndb
 from google.appengine.ext.ndb import metadata
 
 from meta.forms import NdbBaseInlineFormSet
-from meta.models import Book, Author, User
 from meta import models
 
 
@@ -195,24 +194,4 @@ class NdbAdminSite(admin.AdminSite):
 
 site = NdbAdminSite()
 
-class BookInline(TabularNdbInline):
-  model = Book
-
-class AuthorAdmin(NdbAdmin):
-  model = Author
-  inlines = [BookInline]
-  list_display = ('name',)
-  list_filter = ('sex',)
-
-class BookAdmin(NdbAdmin):
-  model = Book
-  list_display = ('name', 'author', 'get_author', 'pages')
-  list_filter = ('author',)
-
-  def get_author(self, obj):
-    return obj.author.get() if obj.author else ""
-  get_author.short_description = 'Author'
-
-site.register([Book], BookAdmin)
-site.register([Author], AuthorAdmin)
-site.register([User], NdbAdmin)
+site.register([models.User])
