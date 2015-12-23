@@ -4,20 +4,17 @@ import sys
 
 if __name__ == "__main__":
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "gaemeta.settings")
-    os.environ.setdefault("APPLICATION_ID", "gaemeta")
     PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-    #sys.path.insert(0, os.path.join(PROJECT_DIR, 'google_appengine'))
-    sys.path.insert(0, 'C:/Program Files (x86)/Google/google_appengine')
-    # sys.path.insert(0, 'C:/Program Files (x86)/Google/google_appengine/lib')
-    #sys.path.insert(0, os.path.join(PROJECT_DIR, 'google_appengine/lib'))
-    #sys.path.insert(0, os.path.join(PROJECT_DIR, 'lib'))
-    #print sys.path
-    #import wrapper_util
-    import dev_appserver
-    dev_appserver.fix_sys_path()
-    sys.path.insert(0, PROJECT_DIR)
-    # GAE inserts django 1.4 into path, we want to use our own version.
-    #sys.path = [p for p in sys.path if 'django' not in sys.path]
+    import wrapper_util
+    dir_path = wrapper_util.get_dir_path('wrapper_util.py', os.path.join('lib', 'ipaddr'))
+    paths = wrapper_util.Paths(dir_path)
+    sys.path[1:1] = paths.script_paths('dev_appserver.py')
+    import yaml
+    conf = yaml.load(open('app.yaml'))
+    app_id = "dev~{}".format(conf['application'])
+    os.environ.setdefault("APPLICATION_ID", app_id)
+    from google.appengine.tools.devappserver2 import api_server
+    api_server.test_setup_stubs(app_id=app_id, application_root=PROJECT_DIR, datastore_path='/var/db/gaedata/datastore.db')
 
     from django.core.management import execute_from_command_line
 
