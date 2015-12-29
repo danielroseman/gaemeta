@@ -67,6 +67,11 @@ class PropertyWrapper(object):
       value = value.urlsafe()
     return value
 
+  def display_value(self, value):
+    if isinstance(self.property, ndb.KeyProperty):
+      return value.get() if value else ""
+    return value
+
   def save_form_data(self, instance, data):
     if isinstance(self.property, ndb.KeyProperty) and isinstance(data, ndb.Model):
       data = data.key
@@ -145,6 +150,9 @@ class IntegerPropertyWrapper(PropertyWrapper):
 
 class BooleanPropertyWrapper(PropertyWrapper):
   formfield_class = forms.BooleanField
+  def display_value(self, value):
+    from django.contrib.admin.templatetags.admin_list import _boolean_icon
+    return _boolean_icon(value)
 
 class FloatPropertyWrapper(PropertyWrapper):
   formfield_class = forms.FloatField
@@ -285,4 +293,3 @@ class User(DjangoCompatibleModel):
 
   def __unicode__(self):
     return self.username
-
