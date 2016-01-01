@@ -2,7 +2,7 @@ from django.apps import apps
 from django.db import models
 from django.db.models import options
 from django.db.models.base import ModelState
-from django.db.models.fields import BLANK_CHOICE_DASH
+from django.db.models.fields import BLANK_CHOICE_DASH, NOT_PROVIDED
 from django.db.models.fields.related import ManyToManyRel, ManyToOneRel
 from django.db.models.query_utils import PathInfo
 from django import forms
@@ -32,7 +32,7 @@ class PropertyWrapper(object):
     self.model = model
     self.creation_counter = creation_counter
     self.blank = self.null = not self.property._required
-    self.default = getattr(self.property, '_default', None)
+    self.default = getattr(self.property, '_default', NOT_PROVIDED)
     self.flatchoices = self.choices = [(x, x) for x in property_._choices or []]
     self.verbose_name = property_._verbose_name or name
     self.remote_field = None
@@ -93,6 +93,9 @@ class PropertyWrapper(object):
     defaults.update(kwargs)
     return field_class(**defaults)
 
+  def has_default(self):
+    return self.default is not NOT_PROVIDED
+
 
 class KeyPropertyWrapper(PropertyWrapper):
   formfield_class = KeyField
@@ -107,7 +110,7 @@ class KeyPropertyWrapper(PropertyWrapper):
       self.many_to_one = True
       rel_class = ManyToOneRel
     remote_kind = ndb.Model._kind_map.get(self.property._kind)
-    self.remote_field = rel_class(self, remote_kind, 'key')
+    self.remote_field = rel_class(self, remote_kind, 'pk')
     self.related_model = remote_kind
     self.target_field = self.remote_field.get_related_field()
 
@@ -189,7 +192,7 @@ WRAPPERS = {
 class KeyWrapper(PropertyWrapper):
   def __init__(self, key):
     self.property_ = key
-    self.attname = 'id'
+    self.attname = 'pk'
     self.name = 'key'
     self.editable = False
     self.unique = True
@@ -197,6 +200,7 @@ class KeyWrapper(PropertyWrapper):
     self.primary_key = True
     self.auto_created = True
     self.remote_field = None
+    self.default = NOT_PROVIDED
     # key is always the first field
     self.creation_counter = 0
 
@@ -247,6 +251,29 @@ class NdbModelMeta(ndb.MetaModel):
     NdbMeta.associate_to_model(cls, 'meta')
 
 
+class KeyValue(object):
+  def __init__(self, value):
+    self.value = value
+
+  @property
+  def pk(self):
+    return self.value
+
+  def __unicode__(self):
+    return self.value.urlsafe()
+
+  def __hash__(self):
+    return hash(self.value)
+
+  def __eq__(self, other):
+    if isinstance(other, ndb.Key):
+      return self.value == other
+    elif isinstance(other, KeyValue):
+      return self.value == other.value
+    else:
+      return False
+
+
 class DjangoCompatibleModel(ndb.Model):
   __metaclass__ = NdbModelMeta
 
@@ -270,13 +297,9 @@ class DjangoCompatibleModel(ndb.Model):
     self.key.delete()
 
   @property
-  def id(self):
-    if self.key:
-      return self.key.urlsafe()
-
-  @property
   def pk(self):
-    return self.key
+    if self.key:
+      return KeyValue(self.key)
 
   def serializable_value(self, prop):
     if prop in ['pk', 'id', 'key']:
