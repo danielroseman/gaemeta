@@ -7,6 +7,9 @@ class Author(DjangoCompatibleModel):
   sex = ndb.StringProperty(choices=('Male', 'Female'))
   alive = ndb.BooleanProperty()
 
+  class Meta:
+    field_order = ['name', 'sex', 'alive']
+
   def __unicode__(self):
     return self.name
 
@@ -17,7 +20,8 @@ class Book(DjangoCompatibleModel):
   pages = ndb.IntegerProperty(default=100)
   read = ndb.DateProperty()
 
-  field_order = ['name', 'author', 'pages']
+  class Meta:
+    field_order = ['name', 'author', 'pages']
 
   def __unicode__(self):
     return self.name

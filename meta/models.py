@@ -217,7 +217,12 @@ class InnerMeta:
 class NdbMeta(options.Options):
   @classmethod
   def associate_to_model(cls, model, app_label):
-    instance = cls(InnerMeta, app_label)
+    inner_meta = getattr(model, 'Meta', InnerMeta)
+    field_order = getattr(inner_meta, 'field_order', None)
+    if field_order is not None:
+      delattr(inner_meta, 'field_order')
+
+    instance = cls(inner_meta, app_label)
     instance.contribute_to_class(model, None)
     instance.add_field(KeyWrapper(instance.model.key))
 
@@ -229,7 +234,6 @@ class NdbMeta(options.Options):
     # to specify fields in a particular order, which will be used to set the
     # creation_counter. If the field_order attribute is missing, or does not
     # contain all the defined fields, they will be added in sorted order.
-    field_order = getattr(model, 'field_order', None)
     all_fields = instance.model._properties
     if field_order:
       # check we have all the fields listed; if not, just add them on the end.
