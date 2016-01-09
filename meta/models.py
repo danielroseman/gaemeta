@@ -1,9 +1,8 @@
 from django.apps import apps
-from django.db import models
 from django.db.models import options
 from django.db.models.base import ModelState
 from django.db.models.fields import BLANK_CHOICE_DASH, NOT_PROVIDED
-from django.db.models.fields.related import ManyToManyRel, ManyToOneRel
+from django.db.models.fields.related import ManyToOneRel
 from django.db.models.query_utils import PathInfo
 from django import forms
 from django.utils.encoding import smart_text
@@ -12,7 +11,7 @@ from django.utils.text import capfirst
 
 from google.appengine.ext import ndb
 
-from meta.forms import KeyField
+from meta.forms import KeyField, MultipleKeyField
 
 class PropertyWrapper(object):
   one_to_many = False
@@ -103,16 +102,17 @@ class KeyPropertyWrapper(PropertyWrapper):
   def __init__(self, *args, **kwargs):
     super(KeyPropertyWrapper, self).__init__(*args, **kwargs)
     self.is_relation = True
-    if getattr(self.property, 'repeated', False):
-      self.many_to_many = True
-      rel_class = ManyToManyRel
-    else:
-      self.many_to_one = True
-      rel_class = ManyToOneRel
+    # Although a repeated KeyProperty is really a M2M relation, we don't want to
+    # set self.many_to_many or use ManyToManyRel as it triggers all kinds of
+    # expectations on through models etc that aren't valid.
+    self.many_to_one = True
+    rel_class = ManyToOneRel
     remote_kind = ndb.Model._kind_map.get(self.property._kind)
     self.remote_field = rel_class(self, remote_kind, 'pk')
     self.related_model = remote_kind
     self.target_field = self.remote_field.get_related_field()
+    if self.property._repeated:
+      self.formfield_class = MultipleKeyField
 
   def formfield(self, **kwargs):
     defaults = {

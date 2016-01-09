@@ -48,6 +48,7 @@ class NdbBaseInlineFormSet(forms.BaseInlineFormSet, NdbBaseModelFormSet):
 
 
 class KeyField(forms.ChoiceField):
+  multiple = False
   def __init__(self, *args, **kwargs):
     self.kind = kwargs.pop('kind')
     if not isinstance(self.kind, basestring):
@@ -62,7 +63,7 @@ class KeyField(forms.ChoiceField):
   def _get_choices(self):
     if not hasattr(self, '_choices'):
       self._choices = [(x.key.urlsafe(), unicode(x)) for x in self.query.fetch()]
-      if not self.required:
+      if not self.required and not self.multiple:
         self._choices.insert(0, (None, '-----'))
     return self._choices
 
@@ -85,3 +86,16 @@ class KeyField(forms.ChoiceField):
       return value.urlsafe()
     else:
       return value
+
+class MultipleKeyField(KeyField):
+  hidden_widget = forms.MultipleHiddenInput
+  widget = forms.SelectMultiple
+  multiple = True
+
+  def to_python(self, values):
+    if values:
+      return [super(MultipleKeyField, self).to_python(val) for val in values]
+
+  def prepare_value(self, values):
+    if values:
+      return [super(MultipleKeyField, self).prepare_value(val) for val in values]
