@@ -5,7 +5,7 @@ from django.db.models.fields import BLANK_CHOICE_DASH, NOT_PROVIDED
 from django.db.models.fields.related import ManyToOneRel
 from django.db.models.query_utils import PathInfo
 from django import forms
-from django.utils.encoding import smart_text
+from django.utils.encoding import smart_text, force_text
 from django.utils.functional import cached_property
 from django.utils.text import capfirst
 
@@ -299,6 +299,11 @@ class DjangoCompatibleModel(ndb.Model):
 
   def delete(self, *args, **kwargs):
     self.key.delete()
+
+  def __str__(self):
+    if hasattr(self, '__unicode__'):
+      return force_text(self).encode('utf-8')
+    return super(DjangoCompatibleModel, self).__str__()
 
   @property
   def pk(self):
