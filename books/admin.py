@@ -21,5 +21,5 @@ class BookAdmin(NdbAdmin):
     return obj.author.get() if obj.author else ""
   get_author.short_description = 'Author'
 
-site.register([Book], BookAdmin)
-site.register([Author], AuthorAdmin)
+site.register(Author, AuthorAdmin)
+site.register(Library, LibraryAdmin)
