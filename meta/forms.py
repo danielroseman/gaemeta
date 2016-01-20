@@ -57,6 +57,10 @@ class KeyField(forms.ChoiceField):
     self.query = kwargs.pop('query', None)
     if not self.query:
       self.query = ndb.Query(kind=self.kind)
+    if kwargs.get('required') and (kwargs.get('initial') is not None):
+      self.empty_label = None
+    else:
+      self.empty_label = kwargs.pop('empty_label', "---------")
     forms.Field.__init__(self, *args, **kwargs)
     self.widget.choices = self.choices
 
@@ -64,7 +68,7 @@ class KeyField(forms.ChoiceField):
     if not hasattr(self, '_choices'):
       self._choices = [(x.key.urlsafe(), unicode(x)) for x in self.query.fetch()]
       if not self.required and not self.multiple:
-        self._choices.insert(0, (None, '-----'))
+        self._choices.insert(0, (None, self.empty_label))
     return self._choices
 
   choices = property(_get_choices, forms.ChoiceField._set_choices)
