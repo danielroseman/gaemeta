@@ -16,12 +16,22 @@ class Author(DjangoCompatibleModel):
 
 class Book(DjangoCompatibleModel):
   name = ndb.StringProperty()
-  author = ndb.KeyProperty(Author)
+  author = ndb.KeyProperty(Author, required=True)
   pages = ndb.IntegerProperty(default=100)
   read = ndb.DateProperty()
 
   class Meta:
     field_order = ['name', 'author', 'pages']
+
+  def __unicode__(self):
+    return self.name
+
+class Library(DjangoCompatibleModel):
+  name = ndb.StringProperty()
+  books = ndb.KeyProperty(Book, repeated=True)
+
+  class Meta:
+    verbose_name_plural = 'libraries'
 
   def __unicode__(self):
     return self.name

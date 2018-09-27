@@ -315,6 +315,9 @@ class DjangoCompatibleModel(ndb.Model):
       return self.key.urlsafe()
     return self._values[prop]
 
+  class DoesNotExist:
+    pass
+
 
 class User(DjangoCompatibleModel):
   user_id = ndb.StringProperty()
